@@ -174,8 +174,8 @@ PersistentKeepalive = 25
 | # | Proto | Source | Destination | Port | Description |
 |---|-------|--------|-------------|------|-------------|
 | 1 | UDP | 192.168.30.40 | 172.16.0.108 | 9004 | Relay tunnel |
-| 2 | TCP | 192.168.30.0/24 | 172.16.0.106 | * | Roon from LAN B |
-| 3 | TCP | 10.10.98.0/24 | 172.16.0.106 | * | Roon from RW B |
+| 2 | TCP/UDP | 192.168.30.0/24 | 172.16.0.106 | * | Roon from LAN B |
+| 3 | TCP/UDP | 10.10.98.0/24 | 172.16.0.106 | * | Roon from RW B |
 | 4 | * | * | * | * | BLOCK all |
 
 #### Site B - NAT Port Forward
@@ -195,8 +195,8 @@ PersistentKeepalive = 25
 | # | Proto | Source | Destination | Port | Description |
 |---|-------|--------|-------------|------|-------------|
 | 1 | UDP | 172.16.0.108 | 192.168.30.40 | 9004 | Relay tunnel |
-| 2 | TCP | 172.16.0.106 | 192.168.30.0/24 | * | Roon to LAN B |
-| 3 | TCP | 172.16.0.106 | 10.10.98.0/24 | * | Roon to RW B |
+| 2 | TCP/UDP | 172.16.0.106 | 192.168.30.0/24 | * | Roon to LAN B |
+| 3 | TCP/UDP | 172.16.0.106 | 10.10.98.0/24 | * | Roon to RW B |
 | 4 | * | * | * | * | BLOCK all |
 
 ### WireGuard Configuration
@@ -405,9 +405,9 @@ PersistentKeepalive = 25
 | # | Proto | Source | Destination | Port | Description |
 |---|-------|--------|-------------|------|-------------|
 | 1 | UDP | 192.168.30.40 | 172.16.0.108 | 9004 | Relay tunnel |
-| 2 | TCP | 192.168.30.0/24 | 172.16.0.106 | * | Roon from LAN B |
-| 3 | TCP | 192.168.99.0/24 | 172.16.0.106 | * | Roon from VLAN100 B |
-| 4 | TCP | 10.10.98.0/24 | 172.16.0.106 | * | Roon from RW B |
+| 2 | TCP/UDP | 192.168.30.0/24 | 172.16.0.106 | * | Roon from LAN B |
+| 3 | TCP/UDP | 192.168.99.0/24 | 172.16.0.106 | * | Roon from VLAN100 B |
+| 4 | TCP/UDP | 10.10.98.0/24 | 172.16.0.106 | * | Roon from RW B |
 | 5 | * | * | * | * | BLOCK all |
 
 #### Site B - NAT Port Forward
@@ -427,9 +427,9 @@ PersistentKeepalive = 25
 | # | Proto | Source | Destination | Port | Description |
 |---|-------|--------|-------------|------|-------------|
 | 1 | UDP | 172.16.0.108 | 192.168.30.40 | 9004 | Relay tunnel |
-| 2 | TCP | 172.16.0.106 | 192.168.30.0/24 | * | Roon to LAN B |
-| 3 | TCP | 172.16.0.106 | 192.168.99.0/24 | * | Roon to VLAN100 B |
-| 4 | TCP | 172.16.0.106 | 10.10.98.0/24 | * | Roon to RW B |
+| 2 | TCP/UDP | 172.16.0.106 | 192.168.30.0/24 | * | Roon to LAN B |
+| 3 | TCP/UDP | 172.16.0.106 | 192.168.99.0/24 | * | Roon to VLAN100 B |
+| 4 | TCP/UDP | 172.16.0.106 | 10.10.98.0/24 | * | Roon to RW B |
 | 5 | * | * | * | * | BLOCK all |
 
 ### WireGuard Configuration
