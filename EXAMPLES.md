@@ -30,11 +30,6 @@
                               │ VPN RW Client   │
                               │ (smartphone)    │
                               │ 10.10.99.3      │
-                              │                 │
-                              │ AllowedIPs:     │
-                              │ 10.10.99.0/24   │
-                              │ 172.16.0.0/24   │
-                              │ 255.255.255.255 │
                               └─────────────────┘
 ```
 
@@ -47,16 +42,42 @@
 | VM Relay | 172.16.0.108 | Broadcast relay |
 | RW Client | 10.10.99.3 | Smartphone via VPN |
 
-### OPNsense Configuration
+### Firewall Rules
 
-**NAT Port Forward (Firewall → NAT → Port Forward):**
-- Interface: WireGuard RW
-- Protocol: UDP
-- Source: 10.10.99.0/24
-- Destination: 255.255.255.255
-- Destination port: 9003
-- Redirect target IP: 172.16.0.108
-- Redirect target port: 9003
+#### NAT Port Forward (Firewall → NAT → Port Forward)
+
+| Interface | Protocol | Source | Destination | Dest Port | Redirect IP | Redirect Port | Description |
+|-----------|----------|--------|-------------|-----------|-------------|---------------|-------------|
+| WG_RW | UDP | 10.10.99.0/24 | 255.255.255.255 | 9003 | 172.16.0.108 | 9003 | Roon broadcast to relay |
+
+### WireGuard Configuration
+
+#### OPNsense - Instance (VPN → WireGuard → Instances)
+
+- Name: `roadwarrior`
+- Listen Port: `51820`
+- Tunnel Address: `10.10.99.1/24`
+
+#### OPNsense - Peer (VPN → WireGuard → Peers)
+
+- Name: `smartphone`
+- Public Key: `<CLIENT_PUBLIC_KEY>`
+- Allowed IPs: `10.10.99.3/32`
+
+#### Client Configuration
+
+```ini
+[Interface]
+PrivateKey = <CLIENT_PRIVATE_KEY>
+Address = 10.10.99.3/24
+DNS = 172.16.0.1
+
+[Peer]
+PublicKey = <SERVER_PUBLIC_KEY>
+Endpoint = <PUBLIC_IP>:51820
+AllowedIPs = 10.10.99.0/24, 172.16.0.0/24, 255.255.255.255/32
+PersistentKeepalive = 25
+```
 
 ### appsettings.json
 
@@ -77,6 +98,8 @@
   ]
 }
 ```
+
+**Note:** Add all roadwarrior client IPs to `UnicastTargets` array.
 
 ---
 
@@ -116,13 +139,7 @@
 ┌─────────────────┐                                       ┌─────────────────┐
 │ VPN RW Client A │                                       │ VPN RW Client B │
 │ 10.10.99.3      │                                       │ 10.10.98.3      │
-│                 │                                       │                 │
-│ AllowedIPs:     │                                       │ AllowedIPs:     │
-│ 10.10.99.0/24   │                                       │ 10.10.98.0/24   │
-│ 172.16.0.0/24   │                                       │ 192.168.30.0/24 │
-│ 255.255.255.255 │                                       │ 172.16.0.0/24   │
-└─────────────────┘                                       │ 255.255.255.255 │
-                                                          └─────────────────┘
+└─────────────────┘                                       └─────────────────┘
 ```
 
 ### Components
@@ -138,18 +155,110 @@
 | RW Client A | 10.10.99.3 | A | VPN client |
 | RW Client B | 10.10.98.3 | B | VPN client |
 
-### WireGuard S2S Configuration
+### Firewall Rules
 
-**Site A - Peer:**
-```
-Allowed IPs: 10.10.90.2/32, 192.168.30.0/24, 10.10.98.0/24
-Endpoint: <PUBLIC_IP_B>:51820
+#### Site A - NAT Port Forward
+
+| Interface | Protocol | Source | Destination | Dest Port | Redirect IP | Redirect Port | Description |
+|-----------|----------|--------|-------------|-----------|-------------|---------------|-------------|
+| WG_RW | UDP | 10.10.99.0/24 | 255.255.255.255 | 9003 | 172.16.0.108 | 9003 | Roon broadcast to relay |
+
+#### Site A - WAN Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | * | This firewall | 51820 | WireGuard S2S |
+
+#### Site A - WG_S2S Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | 192.168.30.40 | 172.16.0.108 | 9004 | Relay tunnel |
+| 2 | TCP | 192.168.30.0/24 | 172.16.0.106 | * | Roon from LAN B |
+| 3 | TCP | 10.10.98.0/24 | 172.16.0.106 | * | Roon from RW B |
+| 4 | * | * | * | * | BLOCK all |
+
+#### Site B - NAT Port Forward
+
+| Interface | Protocol | Source | Destination | Dest Port | Redirect IP | Redirect Port | Description |
+|-----------|----------|--------|-------------|-----------|-------------|---------------|-------------|
+| WG_RW | UDP | 10.10.98.0/24 | 255.255.255.255 | 9003 | 192.168.30.40 | 9003 | Roon broadcast to relay |
+
+#### Site B - WAN Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | * | This firewall | 51820 | WireGuard S2S |
+
+#### Site B - WG_S2S Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | 172.16.0.108 | 192.168.30.40 | 9004 | Relay tunnel |
+| 2 | TCP | 172.16.0.106 | 192.168.30.0/24 | * | Roon to LAN B |
+| 3 | TCP | 172.16.0.106 | 10.10.98.0/24 | * | Roon to RW B |
+| 4 | * | * | * | * | BLOCK all |
+
+### WireGuard Configuration
+
+#### Site A - S2S Instance (VPN → WireGuard → Instances)
+
+- Name: `s2s_siteb`
+- Listen Port: `51820`
+- Tunnel Address: `10.10.90.1/30`
+
+#### Site A - S2S Peer (VPN → WireGuard → Peers)
+
+- Name: `SiteB`
+- Public Key: `<SITE_B_PUBLIC_KEY>`
+- Allowed IPs: `10.10.90.2/32, 192.168.30.0/24, 10.10.98.0/24`
+- Endpoint Address: `<SITE_B_PUBLIC_IP>`
+- Endpoint Port: `51820`
+- Keepalive: `25`
+
+#### Site B - S2S Instance (VPN → WireGuard → Instances)
+
+- Name: `s2s_sitea`
+- Listen Port: `51820`
+- Tunnel Address: `10.10.90.2/30`
+
+#### Site B - S2S Peer (VPN → WireGuard → Peers)
+
+- Name: `SiteA`
+- Public Key: `<SITE_A_PUBLIC_KEY>`
+- Allowed IPs: `10.10.90.1/32, 172.16.0.0/24, 10.10.99.0/24`
+- Endpoint Address: `<SITE_A_PUBLIC_IP>`
+- Endpoint Port: `51820`
+- Keepalive: `25`
+
+#### RW Client A Configuration
+
+```ini
+[Interface]
+PrivateKey = <CLIENT_PRIVATE_KEY>
+Address = 10.10.99.3/24
+DNS = 172.16.0.1
+
+[Peer]
+PublicKey = <SITE_A_RW_PUBLIC_KEY>
+Endpoint = <SITE_A_PUBLIC_IP>:51821
+AllowedIPs = 10.10.99.0/24, 172.16.0.0/24, 255.255.255.255/32
+PersistentKeepalive = 25
 ```
 
-**Site B - Peer:**
-```
-Allowed IPs: 10.10.90.1/32, 172.16.0.0/24, 10.10.99.0/24
-Endpoint: <PUBLIC_IP_A>:51820
+#### RW Client B Configuration
+
+```ini
+[Interface]
+PrivateKey = <CLIENT_PRIVATE_KEY>
+Address = 10.10.98.3/24
+DNS = 192.168.30.1
+
+[Peer]
+PublicKey = <SITE_B_RW_PUBLIC_KEY>
+Endpoint = <SITE_B_PUBLIC_IP>:51821
+AllowedIPs = 10.10.98.0/24, 192.168.30.0/24, 172.16.0.0/24, 255.255.255.255/32
+PersistentKeepalive = 25
 ```
 
 ### appsettings.json - Relay A (Site A)
@@ -191,6 +300,8 @@ Endpoint: <PUBLIC_IP_A>:51820
   ]
 }
 ```
+
+**Note:** Each relay should have its local roadwarrior clients in `UnicastTargets`.
 
 ---
 
@@ -234,22 +345,13 @@ Endpoint: <PUBLIC_IP_A>:51820
         │ VPN RW Client A │                                         │ VPN RW Client B │
         │    (EndP1)      │                                         │    (EndP5)      │
         │   10.10.99.5    │                                         │   10.10.98.5    │
-        │                 │                                         │                 │
-        │ AllowedIPs:     │                                         │ AllowedIPs:     │
-        │ 10.10.99.0/24   │                                         │ 10.10.98.0/24   │
-        │ 172.16.0.0/24   │                                         │ 192.168.30.0/24 │
-        │ 192.168.100/24  │                                         │ 192.168.99.0/24 │
-        │ 255.255.255.255 │                                         │ 172.16.0.0/24   │
-        └─────────────────┘                                         │ 255.255.255.255 │
-                                                                    └─────────────────┘
+        └─────────────────┘                                         └─────────────────┘
 
 
         ┌─────────────────┐
         │ LAN Client A    │
         │    (EndP4)      │
         │  172.16.0.16    │
-        │                 │
-        │ (no VPN needed) │
         └─────────────────┘
 ```
 
@@ -268,6 +370,11 @@ Endpoint: <PUBLIC_IP_A>:51820
 | OPNsense B | 10.10.90.2 | B | WG_S2S | Tunnel endpoint |
 | OPNsense B | 10.10.98.1 | B | WG_RW | VPN server |
 | VM Relay B | 192.168.30.40, 192.168.99.100 | B | LAN + VLAN100 | Multi-homed relay |
+| EndP1 | 10.10.99.5 | A | WG_RW | VPN client |
+| EndP2 | 192.168.100.5 | A | VLAN100 | LAN client |
+| EndP3 | 192.168.30.30 | B | LAN | LAN client |
+| EndP4 | 172.16.0.16 | A | LAN | LAN client |
+| EndP5 | 10.10.98.5 | B | WG_RW | VPN client |
 
 ### Endpoints Summary
 
@@ -279,33 +386,125 @@ Endpoint: <PUBLIC_IP_A>:51820
 | EndP4 | 172.16.0.16 | LAN Site A | ✓ | Same broadcast domain as server |
 | EndP5 | 10.10.98.5 | WG_RW Site B | ✓ | NAT → Relay B → tunnel → Relay A |
 
-### WireGuard S2S Configuration
+### Firewall Rules
 
-**Site A - Peer (to Site B):**
+#### Site A - NAT Port Forward
+
+| Interface | Protocol | Source | Destination | Dest Port | Redirect IP | Redirect Port | Description |
+|-----------|----------|--------|-------------|-----------|-------------|---------------|-------------|
+| WG_RW | UDP | 10.10.99.0/24 | 255.255.255.255 | 9003 | 172.16.0.108 | 9003 | Roon broadcast to relay |
+
+#### Site A - WAN Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | * | This firewall | 51820 | WireGuard S2S |
+
+#### Site A - WG_S2S Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | 192.168.30.40 | 172.16.0.108 | 9004 | Relay tunnel |
+| 2 | TCP | 192.168.30.0/24 | 172.16.0.106 | * | Roon from LAN B |
+| 3 | TCP | 192.168.99.0/24 | 172.16.0.106 | * | Roon from VLAN100 B |
+| 4 | TCP | 10.10.98.0/24 | 172.16.0.106 | * | Roon from RW B |
+| 5 | * | * | * | * | BLOCK all |
+
+#### Site B - NAT Port Forward
+
+| Interface | Protocol | Source | Destination | Dest Port | Redirect IP | Redirect Port | Description |
+|-----------|----------|--------|-------------|-----------|-------------|---------------|-------------|
+| WG_RW | UDP | 10.10.98.0/24 | 255.255.255.255 | 9003 | 192.168.30.40 | 9003 | Roon broadcast to relay |
+
+#### Site B - WAN Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | * | This firewall | 51820 | WireGuard S2S |
+
+#### Site B - WG_S2S Rules
+
+| # | Proto | Source | Destination | Port | Description |
+|---|-------|--------|-------------|------|-------------|
+| 1 | UDP | 172.16.0.108 | 192.168.30.40 | 9004 | Relay tunnel |
+| 2 | TCP | 172.16.0.106 | 192.168.30.0/24 | * | Roon to LAN B |
+| 3 | TCP | 172.16.0.106 | 192.168.99.0/24 | * | Roon to VLAN100 B |
+| 4 | TCP | 172.16.0.106 | 10.10.98.0/24 | * | Roon to RW B |
+| 5 | * | * | * | * | BLOCK all |
+
+### WireGuard Configuration
+
+#### Site A - S2S Instance (VPN → WireGuard → Instances)
+
+- Name: `s2s_siteb`
+- Listen Port: `51820`
+- Tunnel Address: `10.10.90.1/30`
+
+#### Site A - S2S Peer (VPN → WireGuard → Peers)
+
+- Name: `SiteB`
+- Public Key: `<SITE_B_PUBLIC_KEY>`
+- Allowed IPs: `10.10.90.2/32, 192.168.30.0/24, 192.168.99.0/24, 10.10.98.0/24`
+- Endpoint Address: `<SITE_B_PUBLIC_IP>`
+- Endpoint Port: `51820`
+- Keepalive: `25`
+
+#### Site A - RW Instance (VPN → WireGuard → Instances)
+
+- Name: `roadwarrior`
+- Listen Port: `51821`
+- Tunnel Address: `10.10.99.1/24`
+
+#### Site B - S2S Instance (VPN → WireGuard → Instances)
+
+- Name: `s2s_sitea`
+- Listen Port: `51820`
+- Tunnel Address: `10.10.90.2/30`
+
+#### Site B - S2S Peer (VPN → WireGuard → Peers)
+
+- Name: `SiteA`
+- Public Key: `<SITE_A_PUBLIC_KEY>`
+- Allowed IPs: `10.10.90.1/32, 172.16.0.0/24, 192.168.100.0/24, 10.10.99.0/24`
+- Endpoint Address: `<SITE_A_PUBLIC_IP>`
+- Endpoint Port: `51820`
+- Keepalive: `25`
+
+#### Site B - RW Instance (VPN → WireGuard → Instances)
+
+- Name: `roadwarrior`
+- Listen Port: `51821`
+- Tunnel Address: `10.10.98.1/24`
+
+#### RW Client A (EndP1) Configuration
+
+```ini
+[Interface]
+PrivateKey = <CLIENT_PRIVATE_KEY>
+Address = 10.10.99.5/24
+DNS = 172.16.0.1
+
+[Peer]
+PublicKey = <SITE_A_RW_PUBLIC_KEY>
+Endpoint = <SITE_A_PUBLIC_IP>:51821
+AllowedIPs = 10.10.99.0/24, 172.16.0.0/24, 192.168.100.0/24, 255.255.255.255/32
+PersistentKeepalive = 25
 ```
-Allowed IPs: 10.10.90.2/32, 192.168.30.0/24, 192.168.99.0/24, 10.10.98.0/24
-Endpoint: <PUBLIC_IP_B>:51820
+
+#### RW Client B (EndP5) Configuration
+
+```ini
+[Interface]
+PrivateKey = <CLIENT_PRIVATE_KEY>
+Address = 10.10.98.5/24
+DNS = 192.168.30.1
+
+[Peer]
+PublicKey = <SITE_B_RW_PUBLIC_KEY>
+Endpoint = <SITE_B_PUBLIC_IP>:51821
+AllowedIPs = 10.10.98.0/24, 192.168.30.0/24, 192.168.99.0/24, 172.16.0.0/24, 255.255.255.255/32
+PersistentKeepalive = 25
 ```
-
-**Site B - Peer (to Site A):**
-```
-Allowed IPs: 10.10.90.1/32, 172.16.0.0/24, 192.168.100.0/24, 10.10.99.0/24
-Endpoint: <PUBLIC_IP_A>:51820
-```
-
-### NAT Port Forward
-
-**Site A (for WG_RW):**
-- Interface: WireGuard RW
-- Source: 10.10.99.0/24
-- Destination: 255.255.255.255:9003
-- Redirect: 172.16.0.108:9003
-
-**Site B (for WG_RW):**
-- Interface: WireGuard RW
-- Source: 10.10.98.0/24
-- Destination: 255.255.255.255:9003
-- Redirect: 192.168.30.40:9003
 
 ### appsettings.json - Relay A (Site A)
 
@@ -327,7 +526,7 @@ Endpoint: <PUBLIC_IP_A>:51820
     }
   ],
   "UnicastTargets": [
-    "10.10.99.3"
+    "10.10.99.5"
   ]
 }
 ```
@@ -352,41 +551,15 @@ Endpoint: <PUBLIC_IP_A>:51820
     }
   ],
   "UnicastTargets": [
-    "10.10.98.3"
+    "10.10.98.5"
   ]
 }
 ```
 
-### Firewall Rules - Site A (WG_S2S)
-
-| # | Proto | Source | Destination | Port | Description |
-|---|-------|--------|-------------|------|-------------|
-| 1 | UDP | 192.168.30.40 | 172.16.0.108 | 9004 | Relay tunnel |
-| 2 | UDP | 192.168.30.0/24 | 172.16.0.0/24 | 9003 | Discovery from LAN B |
-| 3 | UDP | 192.168.99.0/24 | 172.16.0.0/24 | 9003 | Discovery from VLAN100 B |
-| 4 | UDP | 10.10.98.0/24 | 172.16.0.0/24 | 9003 | Discovery from RW B |
-| 5 | TCP | 192.168.30.0/24 | 172.16.0.0/24 | 9100-9200 | TCP from LAN B |
-| 6 | TCP | 192.168.30.0/24 | 172.16.0.0/24 | 9330-9332 | TCP API from LAN B |
-| 7 | TCP | 192.168.99.0/24 | 172.16.0.0/24 | 9100-9200 | TCP from VLAN100 B |
-| 8 | TCP | 192.168.99.0/24 | 172.16.0.0/24 | 9330-9332 | TCP API from VLAN100 B |
-| 9 | TCP | 10.10.98.0/24 | 172.16.0.0/24 | 9100-9200 | TCP from RW B |
-| 10 | TCP | 10.10.98.0/24 | 172.16.0.0/24 | 9330-9332 | TCP API from RW B |
-| 11 | * | * | * | * | BLOCK all other |
-
-### Firewall Rules - Site B (WG_S2S)
-
-| # | Proto | Source | Destination | Port | Description |
-|---|-------|--------|-------------|------|-------------|
-| 1 | UDP | 172.16.0.108 | 192.168.30.40 | 9004 | Relay tunnel |
-| 2 | UDP | 172.16.0.0/24 | 192.168.30.0/24 | 9003 | Discovery from LAN A |
-| 3 | UDP | 172.16.0.0/24 | 192.168.99.0/24 | 9003 | Discovery to VLAN100 B |
-| 4 | TCP | 172.16.0.0/24 | 192.168.30.0/24 | 9100-9200 | TCP to LAN B |
-| 5 | TCP | 172.16.0.0/24 | 192.168.30.0/24 | 9330-9332 | TCP API to LAN B |
-| 6 | TCP | 172.16.0.0/24 | 192.168.99.0/24 | 9100-9200 | TCP to VLAN100 B |
-| 7 | TCP | 172.16.0.0/24 | 192.168.99.0/24 | 9330-9332 | TCP API to VLAN100 B |
-| 8 | TCP | 172.16.0.0/24 | 10.10.98.0/24 | 9100-9200 | TCP to RW B |
-| 9 | TCP | 172.16.0.0/24 | 10.10.98.0/24 | 9330-9332 | TCP API to RW B |
-| 10 | * | * | * | * | BLOCK all other |
+**Note:** 
+- Each relay lists all its local network interfaces in `LocalInterfaces`
+- Each relay lists its local roadwarrior clients in `UnicastTargets`
+- VLANs require the relay VM to have an IP on each VLAN
 
 ---
 
