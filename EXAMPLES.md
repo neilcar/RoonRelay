@@ -72,7 +72,9 @@
       "SubnetMask": "255.255.255.0"
     }
   ],
-  "UnicastTargets": []
+  "UnicastTargets": [
+    "10.10.99.3"
+  ]
 }
 ```
 
@@ -164,7 +166,9 @@ Endpoint: <PUBLIC_IP_A>:51820
       "SubnetMask": "255.255.255.0"
     }
   ],
-  "UnicastTargets": []
+  "UnicastTargets": [
+    "10.10.99.3"
+  ]
 }
 ```
 
@@ -182,7 +186,9 @@ Endpoint: <PUBLIC_IP_A>:51820
       "SubnetMask": "255.255.255.0"
     }
   ],
-  "UnicastTargets": []
+  "UnicastTargets": [
+    "10.10.98.3"
+  ]
 }
 ```
 
@@ -320,7 +326,9 @@ Endpoint: <PUBLIC_IP_A>:51820
       "SubnetMask": "255.255.255.0"
     }
   ],
-  "UnicastTargets": []
+  "UnicastTargets": [
+    "10.10.99.3"
+  ]
 }
 ```
 
@@ -343,7 +351,9 @@ Endpoint: <PUBLIC_IP_A>:51820
       "SubnetMask": "255.255.255.0"
     }
   ],
-  "UnicastTargets": []
+  "UnicastTargets": [
+    "10.10.98.3"
+  ]
 }
 ```
 
