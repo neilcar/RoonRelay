@@ -15,7 +15,7 @@
 sudo mkdir -p /opt/roonrelay
 cd /opt/roonrelay
 
-# Download latest release (replace VERSION with actual version)
+# Download latest release
 wget https://github.com/simonefil/RoonRelay/releases/download/1.0/RoonRelay
 
 # Make executable
